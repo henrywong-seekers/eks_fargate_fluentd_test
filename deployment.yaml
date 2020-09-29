@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: amazon-cloudwatch
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: fluentd
+      terminationGracePeriodSeconds: 30
+      containers:
+      initContainers:
+        - name: copy-fluentd-config
+          image: busybox
+          command: ['sh', '-c', 'cp /config-volume/..data/* /fluentd/etc']
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config-volume
+            - name: fluentdconf
+              mountPath: /fluentd/etc
+      containers:
+        - name: nginx
+          image: nginx:1.19.2
+          ports:
+          - containerPort: 80
+        - name: fluentd-cloudwatch
+          image: fluent/fluentd-kubernetes-daemonset:v1.7.3-debian-cloudwatch-1.0
+          env:
+            - name: REGION
+              value: ap-southeast-1
+            - name: AWS_REGION
+              value: ap-southeast-1
+            - name: CLUSTER_NAME
+              value: aqt-dev-cluster
+            - name: CI_VERSION
+              value: "k8s/1.2.1"
+          resources:
+            limits:
+              memory: 400Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config-volume
+            - name: fluentdconf
+              mountPath: /fluentd/etc
+            # - name: varlog
+            #   mountPath: /var/log
+            # - name: varlibdockercontainers
+            #   mountPath: /var/lib/docker/containers
+            #   readOnly: true
+            # - name: runlogjournal
+            #   mountPath: /run/log/journal
+            #   readOnly: true
+            # - name: dmesg
+            #   mountPath: /var/log/dmesg
+            #   readOnly: true
+      volumes:
+        - name: config-volume
+          configMap:
+            name: fluentd-config
+        - name: fluentdconf
+          emptyDir: {}
+        # - name: varlog
+        #   hostPath:
+        #     path: /var/log
+        # - name: varlibdockercontainers
+        #   hostPath:
+        #     path: /var/lib/docker/containers
+        # - name: runlogjournal
+        #   hostPath:
+        #     path: /run/log/journal
+        # - name: dmesg
+        #   hostPath:
+        #     path: /var/log/dmesg
