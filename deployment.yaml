@@ -28,10 +28,37 @@ spec:
             - name: fluentdconf
               mountPath: /fluentd/etc
       containers:
+        - name: busybox
+          image: busybox
+          command:
+          - sh
+          args:
+          - -c
+          - >
+            mkdir -p /var/log/containers;
+            exec 3>&1;
+            exec 4> /var/log/containers/busybox.log;
+            while true; do echo "Deployment 1" | tee -a /dev/fd/4 >&3; sleep 1; done;
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log/containers
         - name: nginx
           image: nginx:1.19.2
           ports:
           - containerPort: 80
+          command:
+          - sh
+          args:
+          - -c
+          - >
+            mkdir -p /var/log/nginx;
+            mkdir -p /var/log/containers;
+            exec 3>&1;
+            exec 4> /var/log/containers/nginx.log;
+            /docker-entrypoint.sh nginx -g "daemon off;" | tee -a /dev/fd/4 >&3;
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
         - name: fluentd-cloudwatch
           image: fluent/fluentd-kubernetes-daemonset:v1.7.3-debian-cloudwatch-1.0
           env:
@@ -54,8 +81,8 @@ spec:
               mountPath: /config-volume
             - name: fluentdconf
               mountPath: /fluentd/etc
-            # - name: varlog
-            #   mountPath: /var/log
+            - name: varlog
+              mountPath: /var/log
             # - name: varlibdockercontainers
             #   mountPath: /var/lib/docker/containers
             #   readOnly: true
@@ -70,6 +97,8 @@ spec:
           configMap:
             name: fluentd-config
         - name: fluentdconf
+          emptyDir: {}
+        - name: varlog
           emptyDir: {}
         # - name: varlog
         #   hostPath:
